@@ -11,7 +11,7 @@ try:
     FONT_SMALL = pygame.font.SysFont('dejavusans', 30)
     FONT_TITLE = pygame.font.SysFont('dejavusans', 52)
     FONT_BUTTON = pygame.font.SysFont('dejavusans', 34)
-    FONT_HELP = pygame.font.SysFont('dejavusans', 24)
+    FONT_HELP = pygame.font.SysFont('dejavusans', 23)
 except:
     FONT = pygame.font.SysFont('arial', 38)
     FONT_SMALL = pygame.font.SysFont('arial', 30)
@@ -117,6 +117,25 @@ class Player:
                 self.visited.add(path[self.idx])
                 self.pos = path[self.idx]
 
+def wrap_text(text, font, max_width):
+    words = text.split(' ')
+    lines = []
+    current_line = ""
+    
+    for word in words:
+        test_line = current_line + word + " "
+        if font.size(test_line)[0] <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line.strip())
+            current_line = word + " "
+    
+    if current_line:
+        lines.append(current_line.strip())
+    
+    return lines if lines else [""]
+
 def draw_heart(screen, x, y, size, color):
     heart_surface = pygame.Surface((size, size), pygame.SRCALPHA)
     half = size // 4
@@ -144,8 +163,7 @@ def load_help_text(filepath='help.txt'):
                 return f.read()
         except:
             pass
-    return 
-"""MazeLearn — образовательная игра-лабиринт
+    return """MazeLearn — образовательная игра-лабиринт
 
 Цель игры:
 Дойди от старта до финиша, обезвредив все мины.
@@ -188,7 +206,8 @@ def generate_options(correct, q_type='number'):
     try:
         if q_type == 'binary':
             options = {correct}
-            while len(options) < 4:
+            iterations = 0
+            while len(options) < 4 and iterations < 100:
                 wrong = list(correct)
                 if len(wrong) > 1:
                     idx = random.randint(0, len(wrong)-1)
@@ -196,37 +215,75 @@ def generate_options(correct, q_type='number'):
                 wrong = ''.join(wrong)
                 if wrong != correct and (len(wrong) == 1 or wrong[0] != '0'):
                     options.add(wrong)
+                iterations += 1
+            
+            while len(options) < 4:
+                options.add("0" if random.random() > 0.5 else "1")
             return list(options)
         else:
             correct_num = int(correct)
             options = {correct}
-            while len(options) < 4:
+            iterations = 0
+            while len(options) < 4 and iterations < 100:
                 offset = random.randint(-5, 5)
                 wrong = correct_num + offset
                 if wrong != correct_num and wrong > 0:
                     options.add(str(wrong))
+                iterations += 1
+            
+            while len(options) < 4:
+                options.add(str(correct_num + len(options) + 1))
             return list(options)
     except:
         return [correct, "Вариант1", "Вариант2", "Вариант3"]
 
 def draw_question_screen(screen, question_data, answer_buttons, feedback=None):
+
+    
+    question = question_data.get('q', '?')
+    max_text_width = 490
+    lines = wrap_text(question, FONT, max_text_width)
+    
+    line_height = 38
+    question_height = len(lines) * line_height
+    
+    num_buttons = len(answer_buttons)
+    button_height = num_buttons * 60
+    button_spacing = 20
+    
+    title_height = 50
+    bottom_margin = 50
+    box_h = title_height + question_height + button_spacing + button_height + bottom_margin
+    
+    box_w = 550
+    box_x = (screen.get_width() - box_w) // 2
+    box_y = (screen.get_height() - box_h) // 2
+    
     overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
-    box_w, box_h = 550, 400
-    box_x = (screen.get_width() - box_w) // 2
-    box_y = (screen.get_height() - box_h) // 2
+
     pygame.draw.rect(screen, WHITE, (box_x, box_y, box_w, box_h), border_radius=15)
     pygame.draw.rect(screen, BLUE, (box_x, box_y, box_w, box_h), 4, border_radius=15)
+
     title = FONT.render("Вопрос!", True, RED)
     screen.blit(title, (box_x + 20, box_y + 20))
-    q_text = FONT.render(question_data.get('q', '?'), True, BLACK)
-    screen.blit(q_text, (box_x + 20, box_y + 70))
-    for btn in answer_buttons:
+
+    y_pos = box_y + 60
+    for line in lines:
+        text_surf = FONT.render(line, True, BLACK)
+        screen.blit(text_surf, (box_x + 20, y_pos))
+        y_pos += line_height
+    
+    button_start_y = y_pos + 20
+    for i, btn in enumerate(answer_buttons):
+        btn.rect.y = button_start_y + i * 60
+        btn.rect.x = box_x + 50
         btn.draw(screen)
+    
     if feedback:
         fb_text = FONT.render(feedback, True, GREEN if feedback == "Верно!" else RED)
-        screen.blit(fb_text, (box_x + 160, box_y + 330))
+        screen.blit(fb_text, (box_x + 160, box_y + box_h - 45))
 
 def draw_centered_text(screen, text, font, color, y):
     text_surf = font.render(text, True, color)
@@ -442,21 +499,19 @@ def main():
                         current_question = generate_question_from_template(template)
                         options = current_question.get('options', [])
                         answer_buttons = []
-                        box_w, box_h = 550, 400
-                        box_x = (screen.get_width() - box_w) // 2
-                        box_y = (screen.get_height() - box_h) // 2
                         for i, opt in enumerate(options):
-                            btn = Button(box_x + 50, box_y + 130 + i * 60, 450, 50, opt, color=BLUE)
+                            btn = Button(0, 0, 450, 50, opt, color=BLUE)
                             answer_buttons.append(btn)
                         state = 'question'
                     else:
                         active_mines.discard(path[player.idx])
-        
+        if state == 'game':
+            if player.idx >= len(path) - 1:
+                state = 'victory'
+                
         if state == 'question' and feedback and pygame.time.get_ticks() - feedback_timer > 1000:
             if player.lives <= 0:
                 state = 'game_over'
-            elif player.idx >= len(path)-1 and not active_mines:
-                state = 'victory'
             else:
                 state = 'game'
             feedback = None
@@ -504,6 +559,11 @@ def main():
             draw_ui_panel(screen, player, path, ui_x, offset_y, len(maze), dice, roll_button)
             
         elif state == 'help':
+            if help_scroll_max > 0 and scrollbar_rect:
+                scroll_ratio = help_scroll_y / help_scroll_max
+                min_y = text_area_rect.y + 10 if text_area_rect else 130
+                max_y = min_y + (text_area_rect.height - 30 - scrollbar_rect.height) if text_area_rect else 500
+                scrollbar_rect.y = min_y + int(scroll_ratio * (max_y - min_y))
             draw_help_screen(screen, help_text, help_scroll_y, btns['help_back'], scrollbar_rect, text_area_rect, full_text_surface)
             
         elif state == 'question':
@@ -532,7 +592,7 @@ def main():
                 window_reset = True
                 prev_state = 'game_over'
             draw_centered_text(screen, "Игра окончена!", FONT_TITLE, RED, 240)
-            retry_btn = Button(350, 350, 200, 55, "Заново")
+            retry_btn = Button(350, 350, 200, 55, "Меню")
             retry_btn.draw(screen)
             if event.type == pygame.MOUSEBUTTONDOWN and retry_btn.clicked(event):
                 state = 'menu'
@@ -543,8 +603,8 @@ def main():
                 screen = pygame.display.set_mode((900, 700))
                 window_reset = True
                 prev_state = 'victory'
-            draw_centered_text(screen, "Победа!", FONT_TITLE, GREEN, 240)
-            retry_btn = Button(350, 350, 200, 55, "Заново", color=BLUE)
+            draw_centered_text(screen, "Поздравляем! Победа!", FONT_TITLE, GREEN, 240)
+            retry_btn = Button(350, 350, 200, 55, "Меню")
             retry_btn.draw(screen)
             if event.type == pygame.MOUSEBUTTONDOWN and retry_btn.clicked(event):
                 state = 'menu'
