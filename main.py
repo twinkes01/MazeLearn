@@ -6,18 +6,26 @@ FPS, CELL_SIZE, UI_W = 60, 40, 250
 WHITE, BLACK, GRAY, GREEN, RED, BLUE, YELLOW, LBLUE = (255,255,255), (0,0,0), (100,100,100), (0,255,0), (255,0,0), (0,0,255), (255,255,0), (100,150,255)
 ORANGE = (255, 140, 0)
 
+font_path = "DejaVuSans.ttf"
 try:
-    FONT = pygame.font.SysFont('dejavusans', 38)
-    FONT_SMALL = pygame.font.SysFont('dejavusans', 30)
-    FONT_TITLE = pygame.font.SysFont('dejavusans', 52)
-    FONT_BUTTON = pygame.font.SysFont('dejavusans', 34)
-    FONT_HELP = pygame.font.SysFont('dejavusans', 23)
-except:
-    FONT = pygame.font.SysFont('arial', 38)
-    FONT_SMALL = pygame.font.SysFont('arial', 30)
-    FONT_TITLE = pygame.font.SysFont('arial', 52)
-    FONT_BUTTON = pygame.font.SysFont('arial', 34)
-    FONT_HELP = pygame.font.SysFont('arial', 24)
+    FONT = pygame.font.Font(font_path, 38)
+    FONT_SMALL = pygame.font.Font(font_path, 30)
+    FONT_TITLE = pygame.font.Font(font_path, 52)
+    FONT_BUTTON = pygame.font.Font(font_path, 34)
+    FONT_HELP = pygame.font.Font(font_path, 23)
+except FileNotFoundError:
+    try:
+        FONT = pygame.font.SysFont('dejavusans', 38)
+        FONT_SMALL = pygame.font.SysFont('dejavusans', 30)
+        FONT_TITLE = pygame.font.SysFont('dejavusans', 52)
+        FONT_BUTTON = pygame.font.SysFont('dejavusans', 34)
+        FONT_HELP = pygame.font.SysFont('dejavusans', 23)
+    except:
+        FONT = pygame.font.SysFont('arial', 38)
+        FONT_SMALL = pygame.font.SysFont('arial', 30)
+        FONT_TITLE = pygame.font.SysFont('arial', 52)
+        FONT_BUTTON = pygame.font.SysFont('arial', 34)
+        FONT_HELP = pygame.font.SysFont('arial', 23)
 
 DICE_FACES = {
     1: [(0, 0)],
@@ -338,6 +346,8 @@ def main():
     answer_buttons = []
     feedback = None
     feedback_timer = 0
+
+    used_questions = set()
     
     help_text = load_help_text()
     help_scroll_y = 0
@@ -459,6 +469,7 @@ def main():
                 roll_button = Button(ui_x + 20, maze_bottom_y - 55, 140, 55, "Бросить", color=ORANGE)
                 candidates = [p for p in path if p not in (start, finish)]
                 active_mines = set(random.sample(candidates, min(int(len(path)*gen_params['mine_pct']), len(candidates))))
+                used_questions = set()
                 state = 'game'
                 
             elif state == 'game':
@@ -495,7 +506,16 @@ def main():
                 if path[player.idx] in active_mines:
                     templates = question_templates.get(topic, {}).get(diff, {}).get('templates', [])
                     if templates:
-                        template = random.choice(templates)
+                        available_templates = [t for i, t in enumerate(templates) if i not in used_questions]
+                        if not available_templates:
+                            used_questions = set()
+                            available_templates = templates
+                        
+                        template = random.choice(available_templates)
+
+                        template_index = templates.index(template)
+                        used_questions.add(template_index)
+                        
                         current_question = generate_question_from_template(template)
                         options = current_question.get('options', [])
                         answer_buttons = []
