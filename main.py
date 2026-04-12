@@ -244,6 +244,43 @@ def generate_options(correct, q_type='number'):
             return list(options)
     except:
         return [correct, "Вариант1", "Вариант2", "Вариант3"]
+    
+def draw_mine_indicator(screen, pos, state, offset_x, offset_y, cell_size):
+
+    x = offset_x + pos[0] * cell_size
+    y = offset_y + pos[1] * cell_size
+    cx, cy = x + cell_size // 2, y + cell_size // 2
+    
+    if state == 'active':
+        import math
+        for i in range(8):
+            angle = i * 45
+            rad = math.radians(angle)
+            start_x = cx + int(8 * math.cos(rad))
+            start_y = cy + int(8 * math.sin(rad))
+            end_x = cx + int(10 * math.cos(rad))
+            end_y = cy + int(10 * math.sin(rad))
+            pygame.draw.line(screen, BLACK, (start_x, start_y), (end_x, end_y), 3)
+        
+        pygame.draw.circle(screen, BLACK, (cx, cy), 6)
+        pygame.draw.circle(screen, (50, 50, 50), (cx, cy), 8)
+    
+    elif state == 'defused':
+        pygame.draw.line(screen, GREEN, (cx - 12, cy - 8), (cx - 3, cy + 5), 4)
+        pygame.draw.line(screen, GREEN, (cx -3, cy + 5), (cx + 12, cy - 12), 4)
+    
+    elif state == 'exploded':
+        for i in range(8):
+            angle = i * 45
+            import math
+            rad = math.radians(angle)
+            end_x = cx + int(12 * math.cos(rad))
+            end_y = cy + int(12 * math.sin(rad))
+            pygame.draw.line(screen, RED, (cx, cy), (end_x, end_y), 2)
+        
+        pygame.draw.circle(screen, RED, (cx, cy), 6)
+        pygame.draw.circle(screen, (255, 100, 100), (cx, cy), 4)
+        pygame.draw.circle(screen, ORANGE, (cx, cy), 10, 2)
 
 def draw_question_screen(screen, question_data, answer_buttons, feedback=None):
 
@@ -293,6 +330,26 @@ def draw_question_screen(screen, question_data, answer_buttons, feedback=None):
         fb_text = FONT.render(feedback, True, GREEN if feedback == "Верно!" else RED)
         screen.blit(fb_text, (box_x + 160, box_y + box_h - 45))
 
+def draw_answer_feedback_screen(screen, feedback_text):
+
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    screen.blit(overlay, (0, 0))
+
+    color = GREEN if "Верно" in feedback_text else RED
+
+    lines = feedback_text.split('\n')
+    
+    font_large = pygame.font.SysFont('dejavusans', 64)
+    font_small = pygame.font.SysFont('dejavusans', 42)
+    
+    y_start = screen.get_height() // 2 - 30
+    for i, line in enumerate(lines):
+        font = font_large if i == 0 else font_small
+        text_surf = font.render(line, True, color)
+        text_rect = text_surf.get_rect(center=(screen.get_width() // 2, y_start + i * 50))
+        screen.blit(text_surf, text_rect)
+
 def draw_centered_text(screen, text, font, color, y):
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect(center=(screen.get_width() // 2, y))
@@ -338,6 +395,7 @@ def main():
     
     state, topic, diff = 'menu', None, None
     maze, path, player, dice, active_mines = None, None, None, None, set()
+    mine_states = {}
     roll_button = None
     ui_x, offset_x, offset_y = 0, 0, 0
     gen_params = {}
@@ -346,6 +404,10 @@ def main():
     answer_buttons = []
     feedback = None
     feedback_timer = 0
+
+    answer_feedback = None
+    answer_feedback_timer = 0
+    show_answer_feedback = False
 
     used_questions = set()
     
@@ -468,7 +530,9 @@ def main():
                 dice = Dice(ui_x + 20, maze_bottom_y - 250)
                 roll_button = Button(ui_x + 20, maze_bottom_y - 55, 140, 55, "Бросить", color=ORANGE)
                 candidates = [p for p in path if p not in (start, finish)]
-                active_mines = set(random.sample(candidates, min(int(len(path)*gen_params['mine_pct']), len(candidates))))
+                mine_list = random.sample(candidates, min(int(len(path)*gen_params['mine_pct']), len(candidates)))
+                active_mines = set(mine_list)
+                mine_states = {pos: 'active' for pos in mine_list}
                 used_questions = set()
                 state = 'game'
                 
@@ -482,21 +546,23 @@ def main():
                     if btn.clicked(event):
                         selected_answer = btn.text
                         correct_answer = current_question.get('a', '')
+                        
                         if selected_answer == correct_answer:
-                            feedback = "Верно!"
+                            answer_feedback = "Верно!\nМина обезврежена."
                         else:
-                            feedback = "Неверно!"
-                            if player.lose_health():
-                                state = 'game_over'
-                                break
-                        feedback_timer = pygame.time.get_ticks()
-                        active_mines.discard(path[player.idx])
-                        if player.idx >= len(path)-1 and not active_mines:
-                            state = 'victory'
-                        elif player.lives <= 0:
-                            state = 'game_over'
-                        else:
-                            state = 'game'
+                            answer_feedback = "Неверно!\nМина взорвалась."
+                            player.lose_health()
+                        
+                        show_answer_feedback = True
+                        answer_feedback_timer = pygame.time.get_ticks()
+                        
+                        pos = path[player.idx]
+                        if pos in mine_states:
+                            if "Верно" in answer_feedback:
+                                mine_states[pos] = 'defused'
+                            else:
+                                mine_states[pos] = 'exploded'
+                        active_mines.discard(pos)
                         break
         
         if dice and dice.rolling:
@@ -535,6 +601,16 @@ def main():
             else:
                 state = 'game'
             feedback = None
+
+        if show_answer_feedback:
+            if pygame.time.get_ticks() - answer_feedback_timer >= 1500:
+                show_answer_feedback = False
+                if player.lives <= 0:
+                    state = 'game_over'
+                elif player.idx >= len(path)-1 and not active_mines:
+                    state = 'victory'
+                else:
+                    state = 'game'
 
         screen.fill(WHITE)
         
@@ -576,6 +652,12 @@ def main():
                         col = WHITE
                     pygame.draw.rect(screen, col, r)
                     pygame.draw.rect(screen, BLACK, r, 1)
+                    if (x, y) in mine_states and (x, y) != player.pos:
+                        draw_mine_indicator(screen, (x, y), mine_states[(x, y)], offset_x, offset_y, CELL_SIZE)
+                        player_x = offset_x + player.pos[0] * CELL_SIZE
+            player_y = offset_y + player.pos[1] * CELL_SIZE
+            player_rect = pygame.Rect(player_x + 5, player_y + 5, CELL_SIZE - 10, CELL_SIZE - 10)
+            pygame.draw.rect(screen, BLUE, player_rect, border_radius=5)          
             draw_ui_panel(screen, player, path, ui_x, offset_y, len(maze), dice, roll_button)
             
         elif state == 'help':
@@ -604,6 +686,8 @@ def main():
                         col = WHITE
                     pygame.draw.rect(screen, col, r)
                     pygame.draw.rect(screen, BLACK, r, 1)
+                    if (x, y) in mine_states and (x, y) != player.pos:
+                        draw_mine_indicator(screen, (x, y), mine_states[(x, y)], offset_x, offset_y, CELL_SIZE)
             draw_question_screen(screen, current_question, answer_buttons, feedback)
             
         elif state == 'game_over':
@@ -629,7 +713,10 @@ def main():
             if event.type == pygame.MOUSEBUTTONDOWN and retry_btn.clicked(event):
                 state = 'menu'
                 window_reset = False
-
+    
+        if show_answer_feedback:
+            draw_answer_feedback_screen(screen, answer_feedback)
+            
         pygame.display.flip()
         clock.tick(FPS)
     
