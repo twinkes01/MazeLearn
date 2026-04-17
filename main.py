@@ -12,20 +12,17 @@ try:
     FONT_SMALL = pygame.font.Font(font_path, 30)
     FONT_TITLE = pygame.font.Font(font_path, 52)
     FONT_BUTTON = pygame.font.Font(font_path, 34)
-    FONT_HELP = pygame.font.Font(font_path, 23)
 except FileNotFoundError:
     try:
         FONT = pygame.font.SysFont('dejavusans', 38)
         FONT_SMALL = pygame.font.SysFont('dejavusans', 30)
         FONT_TITLE = pygame.font.SysFont('dejavusans', 52)
         FONT_BUTTON = pygame.font.SysFont('dejavusans', 34)
-        FONT_HELP = pygame.font.SysFont('dejavusans', 23)
     except:
         FONT = pygame.font.SysFont('arial', 38)
         FONT_SMALL = pygame.font.SysFont('arial', 30)
         FONT_TITLE = pygame.font.SysFont('arial', 52)
         FONT_BUTTON = pygame.font.SysFont('arial', 34)
-        FONT_HELP = pygame.font.SysFont('arial', 23)
 
 DICE_FACES = {
     1: [(0, 0)],
@@ -37,14 +34,16 @@ DICE_FACES = {
 }
 
 class Button:
-    def __init__(self, x, y, w, h, text, color=LBLUE):
+    def __init__(self, x, y, w, h, text, color=LBLUE, font_size=34):
         self.rect = pygame.Rect(x, y, w, h)
         self.text, self.color = text, color
+        self.font_size = font_size
     
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect, border_radius=8)
         pygame.draw.rect(screen, BLACK, self.rect, 2, border_radius=8)
-        text_surf = FONT_BUTTON.render(self.text, True, WHITE)
+        font = pygame.font.SysFont('dejavusans', self.font_size)
+        text_surf = font.render(self.text, True, WHITE)
         if text_surf.get_width() > self.rect.width - 20:
             small_font = pygame.font.SysFont('dejavusans', 28)
             text_surf = small_font.render(self.text, True, WHITE)
@@ -129,7 +128,6 @@ def wrap_text(text, font, max_width):
     words = text.split(' ')
     lines = []
     current_line = ""
-    
     for word in words:
         test_line = current_line + word + " "
         if font.size(test_line)[0] <= max_width:
@@ -138,10 +136,8 @@ def wrap_text(text, font, max_width):
             if current_line:
                 lines.append(current_line.strip())
             current_line = word + " "
-    
     if current_line:
         lines.append(current_line.strip())
-    
     return lines if lines else [""]
 
 def draw_heart(screen, x, y, size, color):
@@ -164,25 +160,19 @@ def load_question_templates(filepath='questions.json'):
     except:
         return {}
 
-def load_help_text(filepath='help.txt'):
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return f.read()
-        except:
-            pass
-    return """MazeLearn — образовательная игра-лабиринт
+def load_about_author():
+    try:
+        with open('autor.txt', 'r', encoding='utf-8') as f:
+            return f.read()
+    except:
+        return "Информация об авторе не найдена"
 
-Цель игры:
-Дойди от старта до финиша, обезвредив все мины.
-
-Управление:
-• Нажми "Бросить" для броска кубика
-• При попадании на мину — ответь на вопрос
-
-Жизни: 5 жизней
-
-Удачи! """
+def load_about_program():
+    try:
+        with open('help.txt', 'r', encoding='utf-8') as f:
+            return f.read()
+    except:
+        return "Информация о программе не найдена"
 
 def generate_question_from_template(template):
     a_range = template.get('a_range', [1, 10])
@@ -224,7 +214,6 @@ def generate_options(correct, q_type='number'):
                 if wrong != correct and (len(wrong) == 1 or wrong[0] != '0'):
                     options.add(wrong)
                 iterations += 1
-            
             while len(options) < 4:
                 options.add("0" if random.random() > 0.5 else "1")
             return list(options)
@@ -238,7 +227,6 @@ def generate_options(correct, q_type='number'):
                 if wrong != correct_num and wrong > 0:
                     options.add(str(wrong))
                 iterations += 1
-            
             while len(options) < 4:
                 options.add(str(correct_num + len(options) + 1))
             return list(options)
@@ -246,7 +234,6 @@ def generate_options(correct, q_type='number'):
         return [correct, "Вариант1", "Вариант2", "Вариант3"]
     
 def draw_mine_indicator(screen, pos, state, offset_x, offset_y, cell_size):
-
     x = offset_x + pos[0] * cell_size
     y = offset_y + pos[1] * cell_size
     cx, cy = x + cell_size // 2, y + cell_size // 2
@@ -261,7 +248,6 @@ def draw_mine_indicator(screen, pos, state, offset_x, offset_y, cell_size):
             end_x = cx + int(10 * math.cos(rad))
             end_y = cy + int(10 * math.sin(rad))
             pygame.draw.line(screen, BLACK, (start_x, start_y), (end_x, end_y), 3)
-        
         pygame.draw.circle(screen, BLACK, (cx, cy), 6)
         pygame.draw.circle(screen, (50, 50, 50), (cx, cy), 8)
     
@@ -277,25 +263,20 @@ def draw_mine_indicator(screen, pos, state, offset_x, offset_y, cell_size):
             end_x = cx + int(12 * math.cos(rad))
             end_y = cy + int(12 * math.sin(rad))
             pygame.draw.line(screen, RED, (cx, cy), (end_x, end_y), 2)
-        
         pygame.draw.circle(screen, RED, (cx, cy), 6)
         pygame.draw.circle(screen, (255, 100, 100), (cx, cy), 4)
         pygame.draw.circle(screen, ORANGE, (cx, cy), 10, 2)
 
 def draw_question_screen(screen, question_data, answer_buttons, feedback=None):
-
-    
     question = question_data.get('q', '?')
     max_text_width = 490
     lines = wrap_text(question, FONT, max_text_width)
     
     line_height = 38
     question_height = len(lines) * line_height
-    
     num_buttons = len(answer_buttons)
     button_height = num_buttons * 60
     button_spacing = 20
-    
     title_height = 50
     bottom_margin = 50
     box_h = title_height + question_height + button_spacing + button_height + bottom_margin
@@ -331,18 +312,13 @@ def draw_question_screen(screen, question_data, answer_buttons, feedback=None):
         screen.blit(fb_text, (box_x + 160, box_y + box_h - 45))
 
 def draw_answer_feedback_screen(screen, feedback_text):
-
     overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 200))
     screen.blit(overlay, (0, 0))
-
     color = GREEN if "Верно" in feedback_text else RED
-
     lines = feedback_text.split('\n')
-    
     font_large = pygame.font.SysFont('dejavusans', 64)
     font_small = pygame.font.SysFont('dejavusans', 42)
-    
     y_start = screen.get_height() // 2 - 30
     for i, line in enumerate(lines):
         font = font_large if i == 0 else font_small
@@ -354,6 +330,28 @@ def draw_centered_text(screen, text, font, color, y):
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect(center=(screen.get_width() // 2, y))
     screen.blit(text_surf, text_rect)
+
+def draw_about_author_screen(screen, back_btn, text):
+
+    screen.fill(WHITE)
+    draw_centered_text(screen, "Об авторе", FONT_TITLE, BLUE, 40)
+    y = 150
+    for line in text.split('\n'):
+        text_surf = FONT.render(line, True, BLACK)
+        screen.blit(text_surf, ((screen.get_width() - text_surf.get_width()) // 2, y))
+        y += 40
+    back_btn.draw(screen)
+
+def draw_about_program_screen(screen, back_btn, text):
+    
+    screen.fill(WHITE)
+    draw_centered_text(screen, "О программе", FONT_TITLE, BLUE, 40)
+    y = 150
+    for line in text.split('\n'):
+        text_surf = FONT.render(line, True, BLACK)
+        screen.blit(text_surf, ((screen.get_width() - text_surf.get_width()) // 2, y))
+        y += 40
+    back_btn.draw(screen)
 
 def draw_ui_panel(screen, player, path, ui_x, offset_y, maze_height, dice, roll_button):
     ui_offset = ui_x + 23
@@ -376,17 +374,6 @@ def draw_ui_panel(screen, player, path, ui_x, offset_y, maze_height, dice, roll_
         roll_button.color = GRAY if dice.rolling else ORANGE
         roll_button.draw(screen)
 
-def draw_help_screen(screen, help_text, scroll_y, back_btn, scrollbar_rect, text_area_rect, full_text_surface):
-    screen.fill(WHITE)
-    draw_centered_text(screen, "Справка", FONT_TITLE, BLUE, 40)
-    pygame.draw.rect(screen, GRAY, text_area_rect, 2)
-    screen.blit(full_text_surface, (text_area_rect.x + 10, text_area_rect.y + 10), 
-                (0, scroll_y, text_area_rect.width - 45, text_area_rect.height - 20))
-    if scrollbar_rect:
-        pygame.draw.rect(screen, LBLUE, scrollbar_rect, border_radius=5)
-        pygame.draw.rect(screen, BLACK, scrollbar_rect, 2, border_radius=5)
-    back_btn.draw(screen)
-
 def main():
     global screen
     screen = pygame.display.set_mode((900, 700))
@@ -404,32 +391,25 @@ def main():
     answer_buttons = []
     feedback = None
     feedback_timer = 0
-
     answer_feedback = None
     answer_feedback_timer = 0
     show_answer_feedback = False
-
     used_questions = set()
     
-    help_text = load_help_text()
-    help_scroll_y = 0
-    help_scroll_max = 0
-    help_dragging = False
-    help_scroll_start_y = 0
-    scrollbar_rect = None
-    text_area_rect = None
-    full_text_surface = None
+    about_author_text = load_about_author()
+    about_program_text = load_about_program()
+    
+    show_info_menu = False
+    info_menu_buttons = []
     
     window_reset = False
     prev_state = None
-    
     question_templates = load_question_templates()
 
     btns = {
         'menu': [
             Button(350, 200, 200, 55, "Начать"),
-            Button(350, 280, 200, 55, "Справка"),
-            Button(350, 360, 200, 55, "Выход")
+            Button(350, 360, 200, 55, "Выход") 
         ],
         'topic': [
             Button(230, 250, 220, 55, "Математика", GREEN),
@@ -440,38 +420,38 @@ def main():
             Button(370, 250, 160, 55, "Средняя", YELLOW),
             Button(545, 250, 160, 55, "Сложная", RED)
         ],
-        'back': Button(45, 500, 120, 55, "Назад", GRAY),
-        'help_back': Button(300, 620, 300, 55, "← Назад в меню", GRAY)
+        'back': Button(45, 500, 120, 55, "Назад", GRAY)
     }
 
     running = True
+    running = True
     while running:
+        btn_info_icon = Button(20, 20, 40, 40, "!", color=GRAY, font_size=28)
+        btn_about_author = Button(70, 20, 150, 40, "Об авторе", color=LBLUE, font_size=30)
+        btn_about_program = Button(70, 70, 195, 40, "О программе", color=LBLUE, font_size=29)
+        info_menu_buttons = [btn_about_author, btn_about_program]
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             
-            if state == 'help':
-                if event.type == pygame.MOUSEWHEEL:
-                    help_scroll_y -= event.y * 30
-                    help_scroll_y = max(0, min(help_scroll_y, help_scroll_max))
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        if scrollbar_rect and scrollbar_rect.collidepoint(event.pos):
-                            help_dragging = True
-                            help_scroll_start_y = event.pos[1] - scrollbar_rect.y
-                        if btns['help_back'].clicked(event):
-                            state = 'menu'
-                            help_scroll_y = 0
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    help_dragging = False
-                elif event.type == pygame.MOUSEMOTION and help_dragging and scrollbar_rect:
-                    new_y = event.pos[1] - help_scroll_start_y
-                    min_y = text_area_rect.y + 10 if text_area_rect else 130
-                    max_y = min_y + (text_area_rect.height - 30 - scrollbar_rect.height) if text_area_rect else 500
-                    scrollbar_rect.y = max(min_y, min(new_y, max_y))
-                    if help_scroll_max > 0 and (max_y - min_y) > 0:
-                        scroll_ratio = (scrollbar_rect.y - min_y) / (max_y - min_y)
-                        help_scroll_y = int(scroll_ratio * help_scroll_max)
+            if state == 'menu':
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if btn_info_icon.rect.collidepoint(event.pos):
+                        show_info_menu = not show_info_menu
+                    elif show_info_menu:
+                        if btn_about_author.rect.collidepoint(event.pos):
+                            state = 'about_author'
+                            show_info_menu = False
+                        elif btn_about_program.rect.collidepoint(event.pos):
+                            state = 'about_program'
+                            show_info_menu = False
+                        else:
+                            show_info_menu = False
+            
+            if state in ('about_author', 'about_program'):
+                if btns['back'].clicked(event):
+                    state = 'menu'
             
             if state == 'menu':
                 if not window_reset or prev_state != 'menu':
@@ -481,23 +461,6 @@ def main():
                 if btns['menu'][0].clicked(event):
                     state = 'topic'
                 elif btns['menu'][1].clicked(event):
-                    state = 'help'
-                    lines = help_text.split('\n')
-                    text_height = len(lines) * 28
-                    visible_height = 500
-                    help_scroll_max = max(0, text_height - visible_height)
-                    help_scroll_y = 0
-                    text_area_rect = pygame.Rect(30, 100, screen.get_width() - 60, 520)
-                    full_text_surface = pygame.Surface((text_area_rect.width - 45, text_height), pygame.SRCALPHA)
-                    full_text_surface.fill(WHITE)
-                    y_pos = 0
-                    for line in lines:
-                        text_surf = FONT_HELP.render(line, True, BLACK)
-                        full_text_surface.blit(text_surf, (10, y_pos))
-                        y_pos += 28
-                    scrollbar_height = max(40, int(visible_height * visible_height / max(text_height, visible_height)))
-                    scrollbar_rect = pygame.Rect(screen.get_width() - 50, text_area_rect.y + 10, 25, scrollbar_height)
-                elif btns['menu'][2].clicked(event):
                     running = False
                     
             elif state == 'topic':
@@ -535,6 +498,7 @@ def main():
                 mine_states = {pos: 'active' for pos in mine_list}
                 used_questions = set()
                 state = 'game'
+                pass
                 
             elif state == 'game':
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -546,16 +510,13 @@ def main():
                     if btn.clicked(event):
                         selected_answer = btn.text
                         correct_answer = current_question.get('a', '')
-                        
                         if selected_answer == correct_answer:
                             answer_feedback = "Верно!\nМина обезврежена."
                         else:
                             answer_feedback = "Неверно!\nМина взорвалась."
                             player.lose_health()
-                        
                         show_answer_feedback = True
                         answer_feedback_timer = pygame.time.get_ticks()
-                        
                         pos = path[player.idx]
                         if pos in mine_states:
                             if "Верно" in answer_feedback:
@@ -576,12 +537,9 @@ def main():
                         if not available_templates:
                             used_questions = set()
                             available_templates = templates
-                        
                         template = random.choice(available_templates)
-
                         template_index = templates.index(template)
                         used_questions.add(template_index)
-                        
                         current_question = generate_question_from_template(template)
                         options = current_question.get('options', [])
                         answer_buttons = []
@@ -591,17 +549,11 @@ def main():
                         state = 'question'
                     else:
                         active_mines.discard(path[player.idx])
+        
         if state == 'game':
             if player.idx >= len(path) - 1:
                 state = 'victory'
                 
-        if state == 'question' and feedback and pygame.time.get_ticks() - feedback_timer > 1000:
-            if player.lives <= 0:
-                state = 'game_over'
-            else:
-                state = 'game'
-            feedback = None
-
         if show_answer_feedback:
             if pygame.time.get_ticks() - answer_feedback_timer >= 1500:
                 show_answer_feedback = False
@@ -618,6 +570,11 @@ def main():
             draw_centered_text(screen, "MazeLearn", FONT_TITLE, BLUE, 100)
             for b in btns['menu']:
                 b.draw(screen)
+            
+            btn_info_icon.draw(screen)
+            if show_info_menu:
+                for btn in info_menu_buttons:
+                    btn.draw(screen)
                 
         elif state == 'topic':
             draw_centered_text(screen, "Выберите тему:", FONT, BLACK, 140)
@@ -654,19 +611,20 @@ def main():
                     pygame.draw.rect(screen, BLACK, r, 1)
                     if (x, y) in mine_states and (x, y) != player.pos:
                         draw_mine_indicator(screen, (x, y), mine_states[(x, y)], offset_x, offset_y, CELL_SIZE)
-                        player_x = offset_x + player.pos[0] * CELL_SIZE
+            
+            player_x = offset_x + player.pos[0] * CELL_SIZE
             player_y = offset_y + player.pos[1] * CELL_SIZE
             player_rect = pygame.Rect(player_x + 5, player_y + 5, CELL_SIZE - 10, CELL_SIZE - 10)
-            pygame.draw.rect(screen, BLUE, player_rect, border_radius=5)          
+            pygame.draw.rect(screen, BLUE, player_rect, border_radius=5)
+            pygame.draw.rect(screen, BLACK, player_rect, 2, border_radius=5)
+            
             draw_ui_panel(screen, player, path, ui_x, offset_y, len(maze), dice, roll_button)
             
-        elif state == 'help':
-            if help_scroll_max > 0 and scrollbar_rect:
-                scroll_ratio = help_scroll_y / help_scroll_max
-                min_y = text_area_rect.y + 10 if text_area_rect else 130
-                max_y = min_y + (text_area_rect.height - 30 - scrollbar_rect.height) if text_area_rect else 500
-                scrollbar_rect.y = min_y + int(scroll_ratio * (max_y - min_y))
-            draw_help_screen(screen, help_text, help_scroll_y, btns['help_back'], scrollbar_rect, text_area_rect, full_text_surface)
+        elif state == 'about_author':
+            draw_about_author_screen(screen, btns['back'], about_author_text)
+        
+        elif state == 'about_program':
+            draw_about_program_screen(screen, btns['back'], about_program_text)
             
         elif state == 'question':
             for y, row in enumerate(maze):
