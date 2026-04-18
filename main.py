@@ -200,6 +200,20 @@ def generate_question_from_template(template):
         options = generate_options(correct, template.get('type', 'number'))
     return {'q': question, 'options': options, 'a': correct}
 
+def draw_mine_stats(screen, mines_hit, mines_defused, x, y):
+
+    stat_font = pygame.font.SysFont('dejavusans', 24)
+
+    total_text = stat_font.render(f"Найдено мин: {mines_hit}", True, BLACK)
+    screen.blit(total_text, (x - 8, y - 45))
+
+    defused_text = stat_font.render(f"Обезврежено: {mines_defused}", True, GREEN)
+    screen.blit(defused_text, (x - 8, y - 15))
+
+    defused_text = stat_font.render(f"Взорвались: {mines_hit - mines_defused}", True, RED)
+    screen.blit(defused_text, (x - 8, y + 15))
+
+
 def generate_options(correct, q_type='number'):
     try:
         if q_type == 'binary':
@@ -406,6 +420,9 @@ def main():
     prev_state = None
     question_templates = load_question_templates()
 
+    mines_hit = 0
+    mines_defused = 0
+
     btns = {
         'menu': [
             Button(350, 200, 200, 55, "Начать"),
@@ -426,9 +443,9 @@ def main():
     running = True
     running = True
     while running:
-        btn_info_icon = Button(20, 20, 40, 40, "!", color=GRAY, font_size=28)
+        btn_info_icon = Button(20, 20, 40, 40, "?", color=GRAY, font_size=28)
         btn_about_author = Button(70, 20, 150, 40, "Об авторе", color=LBLUE, font_size=30)
-        btn_about_program = Button(70, 70, 195, 40, "О программе", color=LBLUE, font_size=29)
+        btn_about_program = Button(70, 70, 197, 40, "О программе", color=LBLUE, font_size=29)
         info_menu_buttons = [btn_about_author, btn_about_program]
         
         for event in pygame.event.get():
@@ -497,6 +514,8 @@ def main():
                 active_mines = set(mine_list)
                 mine_states = {pos: 'active' for pos in mine_list}
                 used_questions = set()
+                mines_hit = 0
+                mines_defused = 0
                 state = 'game'
                 pass
                 
@@ -515,10 +534,16 @@ def main():
                         else:
                             answer_feedback = "Неверно!\nМина взорвалась."
                             player.lose_health()
+                        
+                        mines_hit += 1
+                        if "Верно" in answer_feedback:
+                            mines_defused += 1
+
                         show_answer_feedback = True
                         answer_feedback_timer = pygame.time.get_ticks()
                         pos = path[player.idx]
                         if pos in mine_states:
+
                             if "Верно" in answer_feedback:
                                 mine_states[pos] = 'defused'
                             else:
@@ -528,9 +553,15 @@ def main():
         
         if dice and dice.rolling:
             res = dice.update()
-            if res and state == 'game':
+            if res is not None:
+                print(f"🎲 Кубик: {res}, Позиция: {player.idx} → {player.idx + res}")
+            
+            if res is not None and state == 'game':
                 player.move(res, path)
-                if path[player.idx] in active_mines:
+                
+                if player.idx >= len(path) - 1:
+                    state = 'victory'
+                elif path[player.idx] in active_mines:
                     templates = question_templates.get(topic, {}).get(diff, {}).get('templates', [])
                     if templates:
                         available_templates = [t for i, t in enumerate(templates) if i not in used_questions]
@@ -619,6 +650,8 @@ def main():
             pygame.draw.rect(screen, BLACK, player_rect, 2, border_radius=5)
             
             draw_ui_panel(screen, player, path, ui_x, offset_y, len(maze), dice, roll_button)
+
+            draw_mine_stats(screen, mines_hit, mines_defused, ui_x + 20, offset_y + 200)
             
         elif state == 'about_author':
             draw_about_author_screen(screen, btns['back'], about_author_text)
