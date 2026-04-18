@@ -201,18 +201,13 @@ def generate_question_from_template(template):
     return {'q': question, 'options': options, 'a': correct}
 
 def draw_mine_stats(screen, mines_hit, mines_defused, x, y):
-
     stat_font = pygame.font.SysFont('dejavusans', 24)
-
     total_text = stat_font.render(f"Найдено мин: {mines_hit}", True, BLACK)
     screen.blit(total_text, (x - 8, y - 45))
-
     defused_text = stat_font.render(f"Обезврежено: {mines_defused}", True, GREEN)
     screen.blit(defused_text, (x - 8, y - 15))
-
     defused_text = stat_font.render(f"Взорвались: {mines_hit - mines_defused}", True, RED)
     screen.blit(defused_text, (x - 8, y + 15))
-
 
 def generate_options(correct, q_type='number'):
     try:
@@ -346,7 +341,6 @@ def draw_centered_text(screen, text, font, color, y):
     screen.blit(text_surf, text_rect)
 
 def draw_about_author_screen(screen, back_btn, text):
-
     screen.fill(WHITE)
     draw_centered_text(screen, "Об авторе", FONT_TITLE, BLUE, 40)
     y = 150
@@ -357,7 +351,6 @@ def draw_about_author_screen(screen, back_btn, text):
     back_btn.draw(screen)
 
 def draw_about_program_screen(screen, back_btn, text):
-    
     screen.fill(WHITE)
     draw_centered_text(screen, "О программе", FONT_TITLE, BLUE, 40)
     y = 150
@@ -366,6 +359,59 @@ def draw_about_program_screen(screen, back_btn, text):
         screen.blit(text_surf, ((screen.get_width() - text_surf.get_width()) // 2, y))
         y += 40
     back_btn.draw(screen)
+
+class Dropdown:
+    def __init__(self, x, y, w, h, options, color=LBLUE):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.options = options
+        self.selected = None
+        self.color = color
+        self.expanded = False
+        self.option_rects = []
+    
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=8)
+        pygame.draw.rect(screen, BLACK, self.rect, 2, border_radius=8)
+        display_text = self.selected if self.selected else f"Выберите"
+        font = pygame.font.SysFont('dejavusans', 28)
+        text_surf = font.render(display_text, True, WHITE)
+        text_rect = text_surf.get_rect(center=(self.rect.centerx - 11, self.rect.centery))
+        screen.blit(text_surf, text_rect)
+        arrow_x = self.rect.right - 23
+        arrow_y = self.rect.centery
+        pygame.draw.polygon(screen, WHITE, [
+            (arrow_x - 8, arrow_y - 5),
+            (arrow_x + 8, arrow_y - 5),
+            (arrow_x, arrow_y + 5)
+        ])
+        if self.expanded:
+            for i, opt in enumerate(self.options):
+                opt_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height + i * 40, self.rect.width, 40)
+                self.option_rects.append(opt_rect)
+                pygame.draw.rect(screen, LBLUE, opt_rect, border_radius=5)
+                pygame.draw.rect(screen, BLACK, opt_rect, 2, border_radius=5)
+                text_surf = font.render(opt, True, WHITE)
+                text_rect = text_surf.get_rect(center=opt_rect.center)
+                screen.blit(text_surf, text_rect)
+    
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                self.expanded = not self.expanded
+                return False
+            elif self.expanded:
+                for i, opt_rect in enumerate(self.option_rects):
+                    if opt_rect.collidepoint(event.pos):
+                        self.selected = self.options[i]
+                        self.expanded = False
+                        self.option_rects = []
+                        return True
+                self.expanded = False
+                self.option_rects = []
+        return False
+    
+    def is_valid(self):
+        return self.selected is not None
 
 def draw_ui_panel(screen, player, path, ui_x, offset_y, maze_height, dice, roll_button):
     ui_offset = ui_x + 23
@@ -400,6 +446,10 @@ def main():
     roll_button = None
     ui_x, offset_x, offset_y = 0, 0, 0
     gen_params = {}
+
+    topic_dropdown = None
+    diff_dropdown = None
+    settings_valid = False
     
     current_question = None
     answer_buttons = []
@@ -425,22 +475,13 @@ def main():
 
     btns = {
         'menu': [
-            Button(350, 200, 200, 55, "Начать"),
-            Button(350, 360, 200, 55, "Выход") 
+            Button(350, 240, 200, 55, "Настроить", font_size=32),
+            Button(350, 320, 200, 55, "Выход") 
         ],
-        'topic': [
-            Button(230, 250, 220, 55, "Математика", GREEN),
-            Button(450, 250, 220, 55, "Информатика", BLUE)
-        ],
-        'diff': [
-            Button(195, 250, 160, 55, "Легкая", GREEN),
-            Button(370, 250, 160, 55, "Средняя", YELLOW),
-            Button(545, 250, 160, 55, "Сложная", RED)
-        ],
-        'back': Button(45, 500, 120, 55, "Назад", GRAY)
+        'back': Button(45, 620, 120, 55, "Назад", GRAY),
+        'play': Button(350, 450, 200, 55, "Играть", GREEN)
     }
 
-    running = True
     running = True
     while running:
         btn_info_icon = Button(20, 20, 40, 40, "?", color=GRAY, font_size=28)
@@ -466,8 +507,12 @@ def main():
                         else:
                             show_info_menu = False
             
-            if state in ('about_author', 'about_program'):
+            if state in ('about_author', 'about_program', 'settings'):
                 if btns['back'].clicked(event):
+                    if state == 'settings':
+                        topic_dropdown = None
+                        diff_dropdown = None
+                        settings_valid = False
                     state = 'menu'
             
             if state == 'menu':
@@ -476,28 +521,35 @@ def main():
                     window_reset = True
                     prev_state = 'menu'
                 if btns['menu'][0].clicked(event):
-                    state = 'topic'
+                    state = 'settings' 
+                    topic_dropdown = None
+                    diff_dropdown = None
+                    settings_valid = False
                 elif btns['menu'][1].clicked(event):
                     running = False
-                    
-            elif state == 'topic':
-                for i, b in enumerate(btns['topic']):
-                    if b.clicked(event):
-                        topic = 'math' if i==0 else 'info'
-                        state = 'diff'
-                if btns['back'].clicked(event):
-                    state = 'menu'
-                    
-            elif state == 'diff':
-                for i, b in enumerate(btns['diff']):
-                    if b.clicked(event):
-                        diff = ['easy','medium','hard'][i]
-                        size, mine_pct, ratio = [13, 17, 21][i], [0.4, 0.55, 0.7][i], [0.5, 0.5, 0.4][i]
-                        gen_params = {'size': size, 'mine_pct': mine_pct, 'ratio': ratio}
-                        state = 'loading'
-                if btns['back'].clicked(event):
-                    state = 'topic'
-                    
+            
+            elif state == 'settings':
+                if topic_dropdown is None:
+                    topic_dropdown = Dropdown(210, 200, 200, 50, ["Математика", "Информатика"])
+                if diff_dropdown is None:
+                    diff_dropdown = Dropdown(495, 200, 200, 50, ["Лёгкая", "Средняя", "Сложная"])
+                
+                if topic_dropdown:
+                    if topic_dropdown.handle_event(event):
+                        settings_valid = topic_dropdown.is_valid() and diff_dropdown.is_valid()
+                if diff_dropdown:
+                    if diff_dropdown.handle_event(event):
+                        settings_valid = topic_dropdown.is_valid() and diff_dropdown.is_valid()
+                
+                if settings_valid and btns['play'].clicked(event):
+                    topic = 'math' if topic_dropdown.selected == "Математика" else 'info'
+                    diff_selected = diff_dropdown.selected.lower().replace('ё', 'е')
+                    diff_map = {'легкая': 'easy', 'средняя': 'medium', 'сложная': 'hard'}
+                    diff = diff_map.get(diff_selected, 'easy')
+                    size, mine_pct, ratio = [13, 17, 21][['easy','medium','hard'].index(diff)], [0.4, 0.55, 0.7][['easy','medium','hard'].index(diff)], [0.5, 0.5, 0.4][['easy','medium','hard'].index(diff)]
+                    gen_params = {'size': size, 'mine_pct': mine_pct, 'ratio': ratio}
+                    state = 'loading'
+            
             elif state == 'loading':
                 size = gen_params['size']
                 w, h = size * CELL_SIZE + UI_W, max(size * CELL_SIZE + 100, 700)
@@ -517,7 +569,6 @@ def main():
                 mines_hit = 0
                 mines_defused = 0
                 state = 'game'
-                pass
                 
             elif state == 'game':
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -534,16 +585,13 @@ def main():
                         else:
                             answer_feedback = "Неверно!\nМина взорвалась."
                             player.lose_health()
-                        
                         mines_hit += 1
                         if "Верно" in answer_feedback:
                             mines_defused += 1
-
                         show_answer_feedback = True
                         answer_feedback_timer = pygame.time.get_ticks()
                         pos = path[player.idx]
                         if pos in mine_states:
-
                             if "Верно" in answer_feedback:
                                 mine_states[pos] = 'defused'
                             else:
@@ -553,12 +601,8 @@ def main():
         
         if dice and dice.rolling:
             res = dice.update()
-            if res is not None:
-                print(f"🎲 Кубик: {res}, Позиция: {player.idx} → {player.idx + res}")
-            
             if res is not None and state == 'game':
                 player.move(res, path)
-                
                 if player.idx >= len(path) - 1:
                     state = 'victory'
                 elif path[player.idx] in active_mines:
@@ -581,10 +625,6 @@ def main():
                     else:
                         active_mines.discard(path[player.idx])
         
-        if state == 'game':
-            if player.idx >= len(path) - 1:
-                state = 'victory'
-                
         if show_answer_feedback:
             if pygame.time.get_ticks() - answer_feedback_timer >= 1500:
                 show_answer_feedback = False
@@ -598,25 +638,35 @@ def main():
         screen.fill(WHITE)
         
         if state == 'menu':
-            draw_centered_text(screen, "MazeLearn", FONT_TITLE, BLUE, 100)
+            draw_centered_text(screen, "Тропа Знаний", FONT_TITLE, BLUE, 100)
             for b in btns['menu']:
                 b.draw(screen)
-            
             btn_info_icon.draw(screen)
             if show_info_menu:
                 for btn in info_menu_buttons:
                     btn.draw(screen)
                 
-        elif state == 'topic':
-            draw_centered_text(screen, "Выберите тему:", FONT, BLACK, 140)
-            for b in btns['topic']:
-                b.draw(screen)
-            btns['back'].draw(screen)
+        elif state == 'settings':
+            draw_centered_text(screen, "Настройка лабиринта", FONT_TITLE, BLUE, 80)
             
-        elif state == 'diff':
-            draw_centered_text(screen, "Выберите сложность:", FONT, BLACK, 140)
-            for b in btns['diff']:
-                b.draw(screen)
+            topic_label = FONT_SMALL.render("Тема:", True, BLACK)
+            screen.blit(topic_label, (265, 165))
+            diff_label = FONT_SMALL.render("Сложность:", True, BLACK)
+            screen.blit(diff_label, (503, 165))
+            
+            if topic_dropdown:
+                topic_dropdown.option_rects = []
+                topic_dropdown.draw(screen)
+            if diff_dropdown:
+                diff_dropdown.option_rects = []
+                diff_dropdown.draw(screen)
+            
+            if settings_valid:
+                btns['play'].color = GREEN
+            else:
+                btns['play'].color = GRAY
+            btns['play'].draw(screen)
+            
             btns['back'].draw(screen)
             
         elif state == 'loading':
@@ -650,7 +700,6 @@ def main():
             pygame.draw.rect(screen, BLACK, player_rect, 2, border_radius=5)
             
             draw_ui_panel(screen, player, path, ui_x, offset_y, len(maze), dice, roll_button)
-
             draw_mine_stats(screen, mines_hit, mines_defused, ui_x + 20, offset_y + 200)
             
         elif state == 'about_author':
