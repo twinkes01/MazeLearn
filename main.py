@@ -437,7 +437,7 @@ def draw_ui_panel(screen, player, path, ui_x, offset_y, maze_height, dice, roll_
 def main():
     global screen
     screen = pygame.display.set_mode((900, 700))
-    pygame.display.set_caption("MazeLearn")
+    pygame.display.set_caption("Тропа Знаний")
     clock = pygame.time.Clock()
     
     state, topic, diff = 'menu', None, None
@@ -492,6 +492,9 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            if show_answer_feedback:
+                continue                
             
             if state == 'menu':
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -529,10 +532,6 @@ def main():
                     running = False
             
             elif state == 'settings':
-                if topic_dropdown is None:
-                    topic_dropdown = Dropdown(210, 200, 200, 50, ["Математика", "Информатика"])
-                if diff_dropdown is None:
-                    diff_dropdown = Dropdown(495, 200, 200, 50, ["Лёгкая", "Средняя", "Сложная"])
                 
                 if topic_dropdown:
                     if topic_dropdown.handle_event(event):
@@ -647,6 +646,12 @@ def main():
                     btn.draw(screen)
                 
         elif state == 'settings':
+
+            if topic_dropdown is None:
+                topic_dropdown = Dropdown(210, 200, 200, 50, ["Математика", "Информатика"])
+            if diff_dropdown is None:
+                diff_dropdown = Dropdown(495, 200, 200, 50, ["Лёгкая", "Средняя", "Сложная"])
+
             draw_centered_text(screen, "Настройка лабиринта", FONT_TITLE, BLUE, 80)
             
             topic_label = FONT_SMALL.render("Тема:", True, BLACK)
