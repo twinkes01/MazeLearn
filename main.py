@@ -361,22 +361,40 @@ def draw_about_program_screen(screen, back_btn, text):
     back_btn.draw(screen)
 
 class Dropdown:
-    def __init__(self, x, y, w, h, options, color=LBLUE):
+    def __init__(self, x, y, w, h, options, color=LBLUE, is_topic_dropdown=False):
         self.rect = pygame.Rect(x, y, w, h)
         self.options = options
         self.selected = None
         self.color = color
         self.expanded = False
         self.option_rects = []
+        
+        self.is_topic_dropdown = is_topic_dropdown
+        self.stage = 0
+        self.selected_subject = None
+        
+        self.topics_by_subject = {
+            "Математика": ["Математические операции", "Дроби и проценты", "Степени и корни"],
+            "Информатика": ["Системы счисления", "Единицы измерения", "Алгебра логики", "Компьютер и сети"]
+        }
     
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect, border_radius=8)
         pygame.draw.rect(screen, BLACK, self.rect, 2, border_radius=8)
-        display_text = self.selected if self.selected else f"Выберите"
-        font = pygame.font.SysFont('dejavusans', 28)
+        
+        if self.is_topic_dropdown:
+            if self.stage == 0:
+                display_text = self.selected if self.selected else "Выберите"
+            else:
+                display_text = self.selected if self.selected else "Выберите"
+        else:
+            display_text = self.selected if self.selected else f"Выберите"
+        
+        font = pygame.font.SysFont('dejavusans', 25)
         text_surf = font.render(display_text, True, WHITE)
         text_rect = text_surf.get_rect(center=(self.rect.centerx - 11, self.rect.centery))
         screen.blit(text_surf, text_rect)
+        
         arrow_x = self.rect.right - 23
         arrow_y = self.rect.centery
         pygame.draw.polygon(screen, WHITE, [
@@ -384,9 +402,21 @@ class Dropdown:
             (arrow_x + 8, arrow_y - 5),
             (arrow_x, arrow_y + 5)
         ])
+        
         if self.expanded:
-            for i, opt in enumerate(self.options):
-                opt_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height + i * 40, self.rect.width, 40)
+            if self.is_topic_dropdown and self.stage == 1:
+                current_options = self.topics_by_subject.get(self.selected_subject, [])
+            else:
+                current_options = self.options
+            
+            for i, opt in enumerate(current_options):
+                if self.is_topic_dropdown and self.stage == 1:
+                    opt_width = 378
+                    opt_x = self.rect.x - (opt_width - self.rect.width) // 2
+                else:
+                    opt_width = self.rect.width
+                    opt_x = self.rect.x
+                opt_rect = pygame.Rect(opt_x, self.rect.y + self.rect.height + i * 40, opt_width, 40)
                 self.option_rects.append(opt_rect)
                 pygame.draw.rect(screen, LBLUE, opt_rect, border_radius=5)
                 pygame.draw.rect(screen, BLACK, opt_rect, 2, border_radius=5)
@@ -397,21 +427,56 @@ class Dropdown:
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.rect.collidepoint(event.pos):
+                if not self.expanded and self.is_topic_dropdown:
+                    self.stage = 0
                 self.expanded = not self.expanded
                 return False
             elif self.expanded:
+                if self.is_topic_dropdown and self.stage == 1:
+                    current_options = self.topics_by_subject.get(self.selected_subject, [])
+                else:
+                    current_options = self.options
+                
                 for i, opt_rect in enumerate(self.option_rects):
                     if opt_rect.collidepoint(event.pos):
-                        self.selected = self.options[i]
-                        self.expanded = False
-                        self.option_rects = []
-                        return True
+                        selected_option = current_options[i]
+                        
+                        if self.is_topic_dropdown:
+                            if self.stage == 0:
+                                self.selected_subject = selected_option
+                                self.stage = 1 
+                                self.selected = None 
+                                self.option_rects = []
+                                return False  
+                            else:
+                                self.selected = selected_option
+                                self.expanded = False
+                                self.option_rects = []
+                                return True  
+                        else:
+                            self.selected = selected_option
+                            self.expanded = False
+                            self.option_rects = []
+                            return True
+                
                 self.expanded = False
                 self.option_rects = []
         return False
     
     def is_valid(self):
+        if self.is_topic_dropdown:
+            return self.stage == 1 and self.selected is not None
         return self.selected is not None
+    
+    def reset(self):
+        self.selected = None
+        self.selected_subject = None
+        self.stage = 0
+        self.expanded = False
+        self.option_rects = []
+    
+    def get_subject(self):
+        return self.selected_subject
 
 def draw_ui_panel(screen, player, path, ui_x, offset_y, maze_height, dice, roll_button):
     ui_offset = ui_x + 23
@@ -447,9 +512,10 @@ def main():
     ui_x, offset_x, offset_y = 0, 0, 0
     gen_params = {}
 
-    topic_dropdown = None
-    diff_dropdown = None
+    topic_dropdown = None  
+    diff_dropdown = None   
     settings_valid = False
+    selected_topic = None 
     
     current_question = None
     answer_buttons = []
@@ -513,9 +579,10 @@ def main():
             if state in ('about_author', 'about_program', 'settings'):
                 if btns['back'].clicked(event):
                     if state == 'settings':
-                        topic_dropdown = None
-                        diff_dropdown = None
+                        if topic_dropdown: topic_dropdown.reset()
+                        if diff_dropdown: diff_dropdown.reset()
                         settings_valid = False
+                        selected_topic = None
                     state = 'menu'
             
             if state == 'menu':
@@ -525,28 +592,36 @@ def main():
                     prev_state = 'menu'
                 if btns['menu'][0].clicked(event):
                     state = 'settings' 
-                    topic_dropdown = None
-                    diff_dropdown = None
+                    if topic_dropdown: topic_dropdown.reset()
+                    if diff_dropdown: diff_dropdown.reset()
                     settings_valid = False
+                    selected_topic = None
                 elif btns['menu'][1].clicked(event):
                     running = False
             
             elif state == 'settings':
-                
                 if topic_dropdown:
-                    if topic_dropdown.handle_event(event):
-                        settings_valid = topic_dropdown.is_valid() and diff_dropdown.is_valid()
+                    topic_dropdown.handle_event(event)
                 if diff_dropdown:
-                    if diff_dropdown.handle_event(event):
-                        settings_valid = topic_dropdown.is_valid() and diff_dropdown.is_valid()
+                    diff_dropdown.handle_event(event)
+                
+                settings_valid = (
+                    topic_dropdown and topic_dropdown.is_valid() and
+                    diff_dropdown and diff_dropdown.is_valid()
+                )
                 
                 if settings_valid and btns['play'].clicked(event):
-                    topic = 'math' if topic_dropdown.selected == "Математика" else 'info'
+                    subject = topic_dropdown.get_subject()
+                    selected_topic = topic_dropdown.selected
+                    
+                    topic_key = 'math' if subject == "Математика" else 'info'
+                    
                     diff_selected = diff_dropdown.selected.lower().replace('ё', 'е')
                     diff_map = {'легкая': 'easy', 'средняя': 'medium', 'сложная': 'hard'}
                     diff = diff_map.get(diff_selected, 'easy')
                     size, mine_pct, ratio = [13, 17, 21][['easy','medium','hard'].index(diff)], [0.4, 0.55, 0.7][['easy','medium','hard'].index(diff)], [0.5, 0.5, 0.4][['easy','medium','hard'].index(diff)]
                     gen_params = {'size': size, 'mine_pct': mine_pct, 'ratio': ratio}
+                    topic = topic_key
                     state = 'loading'
             
             elif state == 'loading':
@@ -605,7 +680,14 @@ def main():
                 if player.idx >= len(path) - 1:
                     state = 'victory'
                 elif path[player.idx] in active_mines:
-                    templates = question_templates.get(topic, {}).get(diff, {}).get('templates', [])
+                    templates = question_templates.get(topic, {}).get(selected_topic, {}).get(diff, {}).get('templates', [])
+                    
+                    if not templates:
+                        templates = question_templates.get(topic, {}).get(selected_topic, {}).get(diff, {}).get('templates', [])
+                    
+                    if not templates:
+                        templates = question_templates.get(topic, {}).get(diff, {}).get('templates', [])
+                    
                     if templates:
                         available_templates = [t for i, t in enumerate(templates) if i not in used_questions]
                         if not available_templates:
@@ -646,11 +728,12 @@ def main():
                     btn.draw(screen)
                 
         elif state == 'settings':
-
             if topic_dropdown is None:
-                topic_dropdown = Dropdown(210, 200, 200, 50, ["Математика", "Информатика"])
+                topic_dropdown = Dropdown(210, 200, 200, 50, 
+                                         ["Математика", "Информатика"], is_topic_dropdown=True)
             if diff_dropdown is None:
-                diff_dropdown = Dropdown(495, 200, 200, 50, ["Лёгкая", "Средняя", "Сложная"])
+                diff_dropdown = Dropdown(495, 200, 200, 50, 
+                                        ["Лёгкая", "Средняя", "Сложная"])
 
             draw_centered_text(screen, "Настройка лабиринта", FONT_TITLE, BLUE, 80)
             
@@ -661,7 +744,7 @@ def main():
             
             if topic_dropdown:
                 topic_dropdown.option_rects = []
-                topic_dropdown.draw(screen)
+                topic_dropdown.draw(screen) 
             if diff_dropdown:
                 diff_dropdown.option_rects = []
                 diff_dropdown.draw(screen)
